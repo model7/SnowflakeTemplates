@@ -1,0 +1,74 @@
+/* 
+This script is used to create a database, data warehouse and set of roles for a proof-of-concept.
+The script can be updated to include an organizations standards as the POC evolves.
+
+1. copy this script to a text editor and replace "MODEL7" with desired prefix
+2. paste the result in the Snowflake query editor and Run
+3. open Snowflake in one browser to run this script as SYSADMIN and SECURITYADMIN
+4. open Snowflake in another browser to login as different users assigned to different roles
+    - this is how I test different access controls assigned to different roles
+5. update this script with appropriate access controls for future templates
+*/
+
+
+// 1. use SYSADMIN role to create database and data warehouse
+USE ROLE SYSADMIN;
+
+CREATE DATABASE MODEL7_DB;
+
+CREATE SCHEMA "MODEL7_DB"."MODEL7" WITH MANAGED ACCESS;
+
+CREATE WAREHOUSE MODEL7_DW 
+WITH WAREHOUSE_SIZE = 'XSMALL' 
+WAREHOUSE_TYPE = 'STANDARD' 
+AUTO_SUSPEND = 300 
+AUTO_RESUME = TRUE 
+MIN_CLUSTER_COUNT = 1 
+MAX_CLUSTER_COUNT = 2 
+SCALING_POLICY = 'ECONOMY' 
+COMMENT = 'Start with the most economical option and scale up based on usage patterns';
+
+
+USE MODEL7_DB;
+CREATE TABLE MODEL7.TEST_TABLE
+(COL1   INTEGER);
+
+SELECT 'SUCCESSFUL QUERY AGAINST TEST_TABLE' FROM MODEL7_DB.MODEL7.TEST_TABLE;
+
+// 2. use SECURITYADMIN role to create custom roles
+--https://docs.snowflake.net/manuals/user-guide/security-access-control-overview.html
+--https://docs.snowflake.net/manuals/user-guide/security-access-control-considerations.html
+
+USE ROLE SECURITYADMIN;
+
+CREATE ROLE "MODEL7_SYSADMIN"; --SA privs for a specific database and data warehouse
+GRANT ROLE MODEL7_SYSADMIN TO ROLE SYSADMIN;
+GRANT ALL ON DATABASE MODEL7_DB TO MODEL7_SYSADMIN;
+GRANT ALL ON SCHEMA MODEL7_DB.MODEL7 TO MODEL7_SYSADMIN;
+GRANT ALL ON WAREHOUSE MODEL7_DW TO MODEL7_SYSADMIN;
+
+CREATE ROLE "MODEL7_DBDEV"; --developer/engineer privs on specific database
+GRANT ROLE MODEL7_DBDEV TO ROLE MODEL7_SYSADMIN;
+GRANT MONITOR, USAGE, CREATE SCHEMA ON DATABASE MODEL7_DB TO MODEL7_DBDEV;
+GRANT MONITOR, OPERATE, USAGE ON WAREHOUSE MODEL7_DW TO MODEL7_DBDEV;
+
+CREATE ROLE "MODEL7_DBRO"; --read only privs on a specific database
+GRANT ROLE MODEL7_DBRO TO ROLE MODEL7_DBDEV;
+GRANT USAGE ON DATABASE MODEL7_DB TO ROLE MODEL7_DBRO;
+GRANT USAGE ON SCHEMA MODEL7_DB.MODEL7 TO ROLE MODEL7_DBRO;
+GRANT SELECT ON ALL TABLES IN SCHEMA MODEL7_DB.MODEL7 TO ROLE MODEL7_DBRO;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA MODEL7_DB.MODEL7 TO ROLE MODEL7_DBRO;
+GRANT USAGE ON WAREHOUSE MODEL7_DW TO MODEL7_DBRO;
+
+// 3. create users, assign appropriate roles as SECURITYADMIN through the interface
+/*
+//example script
+  CREATE USER model7_SA PASSWORD = '********' DEFAULT_ROLE = "MODEL7_SYSADMIN" MUST_CHANGE_PASSWORD = FALSE;
+  GRANT ROLE "MODEL7_SYSADMIN" TO USER model7_SA;
+*/
+
+
+
+
+
+
