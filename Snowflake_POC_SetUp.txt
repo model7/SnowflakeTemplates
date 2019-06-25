@@ -2,14 +2,22 @@
 This script is used to create a database, data warehouse and set of roles for a proof-of-concept.
 The script can be updated to include an organizations standards as the POC evolves.
 
-1. copy this script to a text editor and replace "MODEL7" with desired prefix
+1. copy this script to a text editor and replace "MODEL7" with desired objectname/prefix
 2. paste the result in the Snowflake query editor and Run
-3. open Snowflake in one browser to run this script as SYSADMIN and SECURITYADMIN
-4. open Snowflake in another browser to login as different users assigned to different roles
+3. log into Snowflake in one browser to run this script as SYSADMIN and SECURITYADMIN
+4. log into Snowflake in another browser to login as different users assigned to different roles
     - this is how I test different access controls assigned to different roles
 5. update this script with appropriate access controls for future templates
 */
 
+// Optional: Create resource monitor to control spend. This one is set very low to support a proof-of-concept that does not require a lot of compute.
+
+USE ROLE ACCOUNTADMIN;
+
+CREATE RESOURCE MONITOR "MAXSPEND" WITH CREDIT_QUOTA = 10 
+ TRIGGERS 
+ ON 80 PERCENT DO SUSPEND;
+ALTER ACCOUNT SET RESOURCE_MONITOR = "MAXSPEND";
 
 // 1. use SYSADMIN role to create database and data warehouse
 USE ROLE SYSADMIN;
