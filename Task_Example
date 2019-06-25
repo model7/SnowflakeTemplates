@@ -1,0 +1,60 @@
+
+/*
+reference: https://docs.snowflake.net/manuals/user-guide/tasks.html
+tasks run on a schedule; no other triggering mechanism
+
+This first section of code can be run as one statement
+*/
+
+// create a new role to manage tasks
+USE ROLE SECURITYADMIN;
+CREATE ROLE TASKADMIN;
+
+// grant privs to execute tasks to the new TASKADMIN role
+USE ROLE ACCOUNTADMIN;
+GRANT EXECUTE TASK ON ACCOUNT TO ROLE TASKADMIN;
+
+// grant TASKADMIN role to the appropriate user
+USE ROLE SECURITYADMIN;
+GRANT ROLE TASKADMIN TO ROLE MODEL7_SYSADMIN;
+
+// set role, database and schema
+USE ROLE MODEL7_SYSADMIN;
+USE DATABASE MODEL7_DB;
+USE SCHEMA MODEL7;
+
+// create target table
+CREATE OR REPLACE TABLE TEST_TASK
+(ID INT AUTOINCREMENT (1,1)
+, INPUT_COL NUMBER
+, INPUT_DT_TM TIMESTAMP);
+
+// create task that writes to the target table
+CREATE OR REPLACE TASK LOAD_TEST_TASK
+    WAREHOUSE = 'MODEL7_DW' --use compute from MODEL7_DW to execute the task; if suspended, this DW will be started automatically to execute the task
+    SCHEDULE = 'USING CRON 01-59 14 25 JUN THU America/Chicago' -- change this to a date and timeframe that makes sense for this test (CRON expression examples can be found here: https://docs.snowflake.net/manuals/sql-reference/sql/create-task.html)
+as
+    INSERT INTO TEST_TASK (INPUT_COL, INPUT_DT_TM) VALUES ('200', TO_TIMESTAMP(CURRENT_TIMESTAMP()));
+
+// set task state to "started"
+ALTER TASK LOAD_TEST_TASK RESUME;
+
+/* end of the first section that can be run as one statement */
+
+/*
+The following statements can be executed separately after the task has been created and resumed/started
+to validate the the task was created, started and excuting according the defined cron schedule
+*/
+
+// validate that the task was created and started
+SHOW TASKS
+
+// validate that the task is writing a record to the TEST_TASK table according to the defined cron schedule
+SELECT * FROM TEST_TASK
+
+// after validating that the task is executing correctly, set task state to "suspended"
+ALTER TASK LOAD_TEST_TASK SUSPEND;
+
+// validate that the task state is set to "suspended" (if no other jobs are running, the DW will auto suspend according to the rules set for the DW)
+SHOW TASKS
+
