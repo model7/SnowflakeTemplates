@@ -30,5 +30,5 @@ File: "5 - "Create LOAD_CDC Task"
 
 File: "Process Monitoring Queries" - used to select data from key tables/functions to monitor the data loads and related stats
 
-File: "Snowflake_POC_Setup"
-File: 
+File: "Snowflake_POC_Setup" - original script used during model7 trial; overlaps with the new file "1 - Create Snowflake Environment Objects"; plan to incorporate any differences into the new files and delete this one 
+File: "Task Example" - simple, self-contained task setup
