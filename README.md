@@ -30,4 +30,5 @@ File: "5 - "Create LOAD_CDC Task"
 
 File: "Process Monitoring Queries" - used to select data from key tables/functions to monitor the data loads and related stats
 
-Other files:
+File: "Snowflake_POC_Setup"
+File: 
