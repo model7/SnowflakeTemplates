@@ -1,0 +1,43 @@
+/************************************
+This is a template script to create staging tables, load initial data, and run a one-time catch up of cdc.
+Assumption: Blob containers and ultimate (merges) table names are equal to the source table name
+************************************/
+
+
+// Create initial load staging table
+USE DATABASE <database name>;
+USE SCHEMA PUBLIC;
+USE WAREHOUSE <warehouse name>;
+
+CREATE TABLE STAGE_<source system name>_INIT.<source table name>_INIT_STG 
+( 
+<DDL for initial staging table that matches the Blob initial load file including any metadata columns; data types and NULL status should match the ultimate (merged) target table>
+);
+
+//load inital load files
+COPY INTO <database name>.STAGE_<source system name>_INIT.<source table name>_INIT_STG
+   FROM '@<stage name>/<blob initial laod path>/<source table name>/'
+   FILE_FORMAT=(FORMAT_NAME = "BLOB_CSV")
+   ON_ERROR = 'CONTINUE' -- may not want to use 'CONTINUE' for production code
+ 
+-- validate data successfully move to initial stage table  
+SELECT  * FROM <database name>.STAGE_<source system name>_INIT.<source table name>_INIT_STG limit 100
+
+// create CDC staging table
+-- this example uses CLONE (recreates table and data) and TRUNCATE. CREATE TABLE...AS may be a better option.
+
+CREATE OR REPLACE TABLE STAGE_<source system name>_CDC.<source table name>_CDC_STG CLONE STAGE_<source system name>_INIT.<source table name>_INIT_STG
+
+TRUNCATE TABLE STAGE_<source system name>_CDC.<source table name>_CDC_STG
+
+--validate that table was created and trunctated
+SELECT * FROM STAGE_<source system name>_CDC.<source table name>_CDC_STG --should return 0 records
+
+//load cdc files 
+COPY INTO <database name>.STAGE_CDC.<source table name>_CDC_STG
+   FROM '@<stage name>/<blob cdc path>/<source table name>/'
+   FILE_FORMAT=(FORMAT_NAME = "BLOB_CSV")
+   ON_ERROR = 'CONTINUE' -- may not want to use 'CONTINUE' for production code
+
+--validate that table was loaded
+SELECT * FROM STAGE_<source system name>_CDC.<source table name>_CDC_STG LIMIT 100

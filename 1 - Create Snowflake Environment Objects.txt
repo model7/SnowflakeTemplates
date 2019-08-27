@@ -1,0 +1,67 @@
+
+// Create resource monitor to control spend. This one is set very low to support a proof-of-concept that does not require a lot of compute.
+
+
+USE ROLE ACCOUNTADMIN;
+
+CREATE RESOURCE MONITOR "MAXSPEND" WITH CREDIT_QUOTA = 10 
+ TRIGGERS 
+ ON 80 PERCENT DO SUSPEND;
+ALTER ACCOUNT SET RESOURCE_MONITOR = "MAXSPEND";
+
+
+// use SYSADMIN role to create database and data warehouse
+USE ROLE SYSADMIN;
+
+CREATE DATABASE <database name>_DB;
+
+CREATE WAREHOUSE <warehouse name>_WH 
+WITH WAREHOUSE_SIZE = 'XSMALL' 
+WAREHOUSE_TYPE = 'STANDARD' 
+AUTO_SUSPEND = 60 --suspend after 1 minute of inactivity
+AUTO_RESUME = TRUE 
+MIN_CLUSTER_COUNT = 1 
+MAX_CLUSTER_COUNT = 2 
+SCALING_POLICY = 'ECONOMY' 
+COMMENT = 'Start with the most economical option and scale up based on usage patterns';
+
+--DB and WH ready
+
+// STAGE
+-- external stage created through Snowflake GUI
+-- example = Azure BLOB Storage: requires url and credentials (https://docs.snowflake.net/manuals/user-guide/data-load-azure-create-stage.html)
+
+USE DATABASE <database name>_DB;
+USE WAREHOUSE <warehouse name>_DW;
+USE SCHEMA PUBLIC; --assumes all objects will be created in PUBLIC
+
+--view existing stages
+select * from information_schema.stages
+
+-- list files in a stage and prove successful connection
+LIST @<stage name>/<blob path> --consider using a path that contains a few files just to test the connection
+
+-- Stage connection validated
+
+// FILE FORMAT - created this through the Snowflake interface (this script generated afterward)
+-- this is an example script that matches the format for blob files in proof-of-concept
+ALTER FILE FORMAT <database name>.PUBLIC.BLOB_CSV SET COMPRESSION = 'AUTO' FIELD_DELIMITER = ',' RECORD_DELIMITER = '\r' SKIP_HEADER = 1 FIELD_OPTIONALLY_ENCLOSED_BY = '\042' TRIM_SPACE = FALSE ERROR_ON_COLUMN_COUNT_MISMATCH = TRUE ESCAPE = 'NONE' ESCAPE_UNENCLOSED_FIELD = '\134' DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF7' TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF7' NULL_IF = ('\\N');
+
+// SCHEMAS
+USE DATABASE <database name>
+CREATE SCHEMA STAGE_<source system name>_INIT;
+CREATE SCHEMA STAGE_<source system name>_CDC;
+
+//TASKADMIN ROLE
+--create a new role to manage tasks
+USE ROLE SECURITYADMIN;
+CREATE ROLE TASKADMIN;
+
+-- grant privs to execute tasks to the new TASKADMIN role
+USE ROLE ACCOUNTADMIN; 
+GRANT EXECUTE TASK ON ACCOUNT TO ROLE TASKADMIN;
+
+-- grant TASKADMIN role to the appropriate user
+USE ROLE SECURITYADMIN;
+GRANT ROLE TASKADMIN TO ROLE SYSADMIN; --assuming roles, grants, etc. will be part of hashmap recommendataions
+

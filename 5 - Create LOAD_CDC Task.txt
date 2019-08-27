@@ -1,0 +1,21 @@
+USE ROLE SYSADMIN;
+USE DATABASE <database name>;
+USE SCHEMA PUBLIC;
+
+// create task to execute LOAD_<source sytem name>_CDC procedure
+CREATE OR REPLACE TASK PUBLIC.LOAD_<source system name>_CDC
+    WAREHOUSE = <warehouse name> --use compute to execute the task; if suspended, this WH will be started automatically to execute the task
+    SCHEDULE = 'USING CRON 0-59/5 9-17 * * 1-5 America/Chicago' 
+        -- CRON expression examples can be found here: https://docs.snowflake.net/manuals/sql-reference/sql/create-task.html
+        -- CRON syntax checker can be found here: https://crontab.guru/
+as
+CALL LOAD_<source system name>_CDC()
+;
+
+SHOW TASKS
+
+--enable task to execute on schedule
+ALTER TASK PUBLIC.LOAD_<source system name>_CDC RESUME;
+
+--stop task from executing on schedule
+ALTER TASK PUBLIC.LOAD_<source system name>_CDC SUSPEND;

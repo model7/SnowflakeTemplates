@@ -1,0 +1,42 @@
+//create CDC load procedure
+/*
+input: source table location
+input: target table name (staging table will use same name + prefix or suffix)
+action: truncate staging table copy from source CDC location to staging table
+*/
+
+USE DATABASE <database name>;
+USE WAREHOUSE <warehouse name>;
+USE SCHEMA PUBLIC;
+USE ROLE SYSADMIN;
+
+CREATE OR REPLACE PROCEDURE LOAD_<source system name>_CDC()
+returns varchar(500) null
+language javascript
+AS
+    
+$$
+--insert timestamp
+var ts_stmt = snowflake.createStatement({sqlText: "INSERT INTO PUBLIC.TASK_TIMESTAMP (TASK_NAME, TASK_ACTION, TIMESTAMP) VALUES ('LOAD_<source system name>_CDC', 'START', TO_TIMESTAMP(CURRENT_TIMESTAMP()))"});
+var ts_result = ts_stmt.execute();
+
+
+--select tables in CDC_STAGE schema
+  var tbl = "SELECT TABLE_SCHEMA || '.' ||TABLE_NAME, REPLACE(TABLE_NAME, '_CDC_STG', '') FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'STAGE_<source system>_CDC'";
+  var tbl_stmt = snowflake.createStatement({sqlText: tbl});
+  var tbl_result = tbl_stmt.execute();
+
+--loop through tables and load cdc files
+  while (tbl_result.next()) {
+  var stg_tbl = tbl_result.getColumnValue(1);
+  var cdc_file = tbl_result.getColumnValue(2);
+  var load_cdc = "COPY INTO " + stg_tbl + " FROM @<stage name>/<blob path>/" + cdc_file + "/ FILE_FORMAT=(FORMAT_NAME = 'BLOB_CSV') ON_ERROR = 'CONTINUE'";
+  snowflake.execute({sqlText: load_cdc});
+  }
+
+//insert timestamp
+var ts_stmt1 = snowflake.createStatement({sqlText: "INSERT INTO PUBLIC.TASK_TIMESTAMP (TASK_NAME, TASK_ACTION, TIMESTAMP) VALUES ('LOAD_<source system>_CDC', 'END', TO_TIMESTAMP(CURRENT_TIMESTAMP()))"});
+var ts_result1 = ts_stmt1.execute();
+
+$$
+;

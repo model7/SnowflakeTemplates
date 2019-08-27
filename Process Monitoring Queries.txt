@@ -1,0 +1,23 @@
+USE ROLE SYSADMIN;
+USE DATABASE <database name>;
+USE SCHEMA PUBLIC;
+
+--task execution history
+SELECT *
+FROM TABLE (INFORMATION_SCHEMA.TASK_HISTORY(
+--      [ SCHEDULED_TIME_RANGE_START => <constant_expr> ]
+--      [, SCHEDULED_TIME_RANGE_END => <constant_expr> ]
+--      [, RESULT_LIMIT => <integer> ]
+--       TASK_NAME => 'LOAD_<source system name>_CDC'
+        ));
+       
+--procedure execution history
+SELECT * 
+FROM PUBLIC.TASK_TIMESTAMP
+ORDER BY ID DESC
+
+--table load history: returns one record for each stage file loaded to a target table
+SELECT * 
+FROM INFORMATION_SCHEMA.LOAD_HISTORY
+--WHERE LAST_LOAD_TIME > CURRENT_DATE
+ORDER BY LAST_LOAD_TIME DESC
