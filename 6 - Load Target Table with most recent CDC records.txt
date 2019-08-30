@@ -1,0 +1,74 @@
+
+/*
+This script is based on assumptions regarding DDL, CDC strategy, and metadata columns. 
+  - DDL of the initial load staging table, cdc staging table, and target table match
+  - CDC strategy includes journaling all records captured through the cdc process
+  - Metadata columns are used to store the time a source record was changed and source record disposition (insert, update, delete)
+
+Expect to create a procedure
+  - if assumptions above are met, a procedure may be used to generate MERGE statements for all tables to be processed
+
+Expect to create a task to schedule execution of the procedure.
+*/
+
+USE WAREHOUSE <warehouse name>;
+USE DATABASE <database name>;
+USE SCHEMA <schema name>;
+
+// initial load
+-- target tables was created using CLONE (clones table and data) from the initial load schema
+
+
+// CDC load
+-- may be able to do generate and execute the code in a procedure if unique keys are created on the target table and column names match
+
+
+-- create "rollup" view with most recent record from CDC table
+CREATE VIEW <cdc schema>.<table name>_CDC_STG_ROLLUP AS
+SELECT DISTINCT T.*
+FROM <cdc schema>.<table name>_CDC_STG T
+JOIN (SELECT <unique key columns>, MAX(_METADATA_EVENTTIME) MAX_CDC_DATETIME
+      FROM <cdc schema>.<table name>_CDC_STG
+      WHERE _METADATA_EVENTTIME > (SELECT MAX(_METADATA_EVENTTIME) FROM <target schema>.<table name>) --only return CDC records captured after the last time the target table was loaded
+      GROUP BY <unique key columns>) R
+        ON T.<unique key columns> = R.<unique key columns>
+        AND T._METADATA_EVENTTIME = R.MAX_CDC_DATETIME
+
+--validate there are no duplicates in the rollup view
+SELECT <unique key columns>, _METADATA_EVENTTIME, COUNT(*)
+FROM <cdc schema>.<table name>_CDC_STG_ROLLUP
+GROUP BY <unique key columns>, _METADATA_EVENTTIME
+HAVING COUNT(*) > 1
+
+-- return the number records expected to be inserted and updated/deleted
+SELECT _METADATA_CDCOP, COUNT(*)
+FROM <cdc schema>.<table name>_CDC_STG_ROLLUP
+GROUP BY _METADATA_CDCOP
+
+--generate content for update section of the merge statement; assumes DDL of source and target tables match
+SELECT 'T.' || COLUMN_NAME || '= T1.' || COLUMN_NAME || ', '
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = <target table name>
+ORDER BY ORDINAL_POSITION
+
+
+--generate content for insert section of the merge statement; assumes DDL of source and target tables match
+SELECT 'T.' || COLUMN_NAME || ', '
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = <target table name>
+--and is_nullable = 'NO'
+ORDER BY ORDINAL_POSITION
+
+SELECT 'T1.' || COLUMN_NAME || ', '
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = '<table name>_CDC_STG'
+ORDER BY ORDINAL_POSITION
+
+--load cdc records into target table
+MERGE INTO <target schema>.<table name> T USING <cdc schema>.<table name>_CDC_STG_ROLLUP T1 ON <unique key columns>
+    WHEN MATCHED AND T1._METADATA_CDCOP = 'D' THEN DELETE
+    WHEN MATCHED THEN UPDATE SET 
+        T.<target column> = T1.<cdc column> 
+    WHEN NOT MATCHED AND T1._METADATA_CDCOP <> 'D' THEN INSERT (T.<target column>) VALUES (T1.<cdc column>)
+
+
